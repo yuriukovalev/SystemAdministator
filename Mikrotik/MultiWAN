@@ -1,0 +1,391 @@
+# Создаем базовые interface lists для удобства оперирования в фаерволе, настройках discovery и прочих MAC серверах:
+
+/interface list add name=WAN comment="For Internet"
+
+/interface list add name=LAN comment="For Local Area"
+
+Подписываем комментариями интерфейсы
+
+/interface ethernet set ether1 comment="to LAN"
+
+/interface ethernet set ether2 comment="to ISP1"
+
+/interface ethernet set ether3 comment="to ISP2"
+
+/interface ethernet set ether4 comment="to ISP3"
+
+/interface ethernet set ether5 comment="to ISP4"
+
+# заполняем interface lists:
+
+/interface list member add interface=ether1 list=LAN comment=LAN
+
+/interface list member add interface=ether2 list=WAN comment=ISP1
+
+/interface list member add interface=ether3 list=WAN comment=ISP2
+
+/interface list member add interface=ether4 list=WAN comment=ISP3
+
+/interface list member add interface=ether5 list=WAN comment=ISP4
+
+# Скрываем роутер от обнаружения соседства и управления из сетей провайдеров по МАС:
+
+/ip neighbor discovery-settings set discover-interface-list=!WAN
+
+/tool mac-server set allowed-interface-list=LAN
+
+/tool mac-server mac-winbox set allowed-interface-list=LAN
+
+# Создаем минимально достаточный набор правил фильтра файрволла для защиты роутера:
+
+/ip firewall filter add action=accept chain=input \
+
+comment="Related Established Untracked Allow" \
+
+connection-state=established,related,untracked
+
+/ip firewall filter add action=accept chain=input \
+
+comment="ICMP from ALL" protocol=icmp
+
+/ip firewall filter add action=drop chain=input comment="All other WAN Drop" \
+
+in-interface-list=WAN
+
+/ip firewall filter add action=accept chain=forward \
+
+comment="Established, Related, Untracked allow" \
+
+connection-state=established,related,untracked
+
+/ip firewall filter add action=drop chain=forward comment="Invalid drop" \
+
+connection-state=invalid
+
+/ip firewall filter add action=drop chain=forward \
+
+comment="Drop all from WAN not DSTNATed" connection-nat-state=!dstnat \
+
+connection-state=new in-interface-list=WAN
+
+# Создаем список с перечнем не маршрутизируемых сетей:
+
+/ip firewall address-list
+
+add address=0.0.0.0/8 comment="\"This\" Network" list=BOGONS
+
+add address=10.0.0.0/8 comment="Private-Use Networks" list=BOGONS
+
+add address=100.64.0.0/10 comment="Shared Address Space. RFC 6598" list=BOGONS
+
+add address=127.0.0.0/8 comment=Loopback list=BOGONS
+
+add address=169.254.0.0/16 comment="Link Local" list=BOGONS
+
+add address=172.16.0.0/12 comment="Private-Use Networks" list=BOGONS
+
+add address=192.0.0.0/24 comment="IETF Protocol Assignments" list=BOGONS
+
+add address=192.0.2.0/24 comment=TEST-NET-1 list=BOGONS
+
+add address=192.168.0.0/16 comment="Private-Use Networks" list=BOGONS
+
+add address=198.18.0.0/15 comment="Network Interconnect Device Benchmark Testing"\
+
+list=BOGONS
+
+add address=198.51.100.0/24 comment=TEST-NET-2 list=BOGONS
+
+add address=203.0.113.0/24 comment=TEST-NET-3 list=BOGONS
+
+add address=224.0.0.0/4 comment=Multicast list=BOGONS
+
+add address=192.88.99.0/24 comment="6to4 Relay Anycast" list=BOGONS
+
+add address=240.0.0.0/4 comment="Reserved for Future Use" list=BOGONS
+
+add address=255.255.255.255 comment="Limited Broadcast" list=BOGONS
+
+# Настраиваем DNS для самого роутера
+
+/ip dns set servers=1.1.1.1,8.8.8.8
+
+# Настраиваем локальную сеть.Конфигурируем статические IP адреса на интерфейсах локальных сетей:
+
+/ip address add interface=ether1 address=10.180.1.254/22 comment="LAN IP"
+
+# Задаем правила маршрутов к нашим локальным сетям через главную таблицу маршрутизации.
+
+/ip route rule add dst-address=10.180.0.0/22 table=main comment="to LAN"
+
+# Если необходимо включаем Hairpin NAT для LAN
+
+/ip firewall nat add action=src-nat chain=srcnat comment="Hairpin to LAN" \
+
+out-interface=ether1 src-address=10.180.0.0/22 to-addresses=10.180.1.254
+
+# Метим входящие соединения от каждого из провайдеров
+
+/ip firewall mangle add action=mark-connection chain=prerouting \
+
+comment="Connmark in from ISP1" connection-mark=no-mark in-interface=ether2 \
+
+new-connection-mark=conn_isp1 passthrough=no
+
+/ip firewall mangle add action=mark-connection chain=prerouting \
+
+comment="Connmark in from ISP2" connection-mark=no-mark in-interface=ether3 \
+
+new-connection-mark=conn_isp2 passthrough=no
+
+/ip firewall mangle add action=mark-connection chain=prerouting \
+
+comment="Connmark in from ISP3" connection-mark=no-mark in-interface=ether4 \
+
+new-connection-mark=conn_isp3 passthrough=no
+
+/ip firewall mangle add action=mark-connection chain=prerouting \
+
+comment="Connmark in from ISP4" connection-mark=no-mark in-interface=ether5 \
+
+new-connection-mark=conn_isp4 passthrough=no
+
+# Направляем ответный транзитный трафик по соответствующим таблицам маршрутизации
+
+/ip firewall mangle add action=mark-routing chain=prerouting \
+
+comment="Routemark transit out via ISP1" connection-mark=conn_isp1 \
+
+dst-address-type=!local in-interface-list=!WAN new-routing-mark=to_isp1 passthrough=no
+
+/ip firewall mangle add action=mark-routing chain=prerouting \
+
+comment="Routemark transit out via ISP2" connection-mark=conn_isp2 \
+
+dst-address-type=!local in-interface-list=!WAN new-routing-mark=to_isp2 passthrough=no
+
+/ip firewall mangle add action=mark-routing chain=prerouting \
+
+comment="Routemark transit out via ISP3" connection-mark=conn_isp3 \
+
+dst-address-type=!local in-interface-list=!WAN new-routing-mark=to_isp3 passthrough=no
+
+/ip firewall mangle add action=mark-routing chain=prerouting \
+
+comment="Routemark transit out via ISP4" connection-mark=conn_isp4 \
+
+dst-address-type=!local in-interface-list=!WAN new-routing-mark=to_isp4 passthrough=no
+
+# Направляем ответный локальный трафик по соответствующим таблицам маршрутизации
+
+/ip firewall mangle add action=mark-routing chain=output \
+
+comment="Routemark local out via ISP1" connection-mark=conn_isp1 \
+
+dst-address-type=!local new-routing-mark=to_isp1 passthrough=no
+
+/ip firewall mangle add action=mark-routing chain=output \
+
+comment="Routemark local out via ISP2" connection-mark=conn_isp2 \
+
+dst-address-type=!local new-routing-mark=to_isp2 passthrough=no
+
+/ip firewall mangle add action=mark-routing chain=output \
+
+comment="Routemark local out via ISP3" connection-mark=conn_isp3 \
+
+dst-address-type=!local new-routing-mark=to_isp3 passthrough=no
+
+/ip firewall mangle add action=mark-routing chain=output \
+
+comment="Routemark local out via ISP4" connection-mark=conn_isp4 \
+
+dst-address-type=!local new-routing-mark=to_isp4 passthrough=no
+
+# Направляем трафик от локальных клиентов из списков маршрутизации в соответствующие таблицы
+
+/ip firewall mangle add action=mark-routing chain=prerouting \
+
+comment="Address List via ISP1" dst-address-list=!BOGONS new-routing-mark=to_isp1 \
+
+passthrough=no src-address-list=Via_ISP1
+
+/ip firewall mangle add action=mark-routing chain=prerouting \
+
+comment="Address List via ISP2" dst-address-list=!BOGONS new-routing-mark=to_isp2 \
+
+passthrough=no src-address-list=Via_ISP2
+
+/ip firewall mangle add action=mark-routing chain=prerouting \
+
+comment="Address List via ISP3" dst-address-list=!BOGONS new-routing-mark=to_isp3 \
+
+passthrough=no src-address-list=Via_ISP3
+
+/ip firewall mangle add action=mark-routing chain=prerouting \
+
+comment="Address List via ISP4» dst-address-list=!BOGONS new-routing-mark=to_isp4 \
+
+passthrough=no src-address-list=Via_ISP4
+
+# Настраиваем подключение к ISP1 Конфигурируем статический IP адрес
+
+/ip address add interface=ether2 address=212.220.217.38/30 comment="ISP1 IP"
+
+# Настраиваем статическую маршрутизацию Добавляем “аварийный” маршрут по умолчанию
+
+/interface bridge add name=br-lo comment="Loopback interface"
+
+/ip route add distance=254 gateway=br-lo comment="Emergency route"
+
+# Задаем маршрут до “проверочного” адреса
+
+/ip route add check-gateway=ping comment="For recursion via ISP1" \
+
+distance=1 dst-address=4.2.2.1 gateway=212.220.217.37 scope=11
+
+# Рекурсивный маршрут по умолчанию для трафика без routing mark
+
+/ip route add check-gateway=ping comment="Unmarked via ISP1" \
+
+distance=2 gateway=4.2.2.1 target-scope=11
+
+# Рекурсивный маршрут по умолчанию для трафика c routing mark “to_isp1”
+
+/ip route add comment="Marked via ISP1 Main" distance=1 gateway=4.2.2.1 \
+
+routing-mark=to_isp1 target-scope=11
+
+# Первый резервный рекурсивный маршрут по умолчанию для маркированного трафика провайдеров ISP2 и ISP3
+
+/ip route add comment="Marked via ISP2 Backup1" distance=2 gateway=4.2.2.1 \
+
+routing-mark=to_isp2 target-scope=11
+
+/ip route add comment="Marked via ISP3 Backup1" distance=2 gateway=4.2.2.1 \
+
+routing-mark=to_isp3 target-scope=11
+
+/ip route add comment="Marked via ISP4 Backup1" distance=2 gateway=4.2.2.1 \
+
+routing-mark=to_isp4 target-scope=11
+
+# Прописываем маршрут для локального трафика роутера в интернет через ISP1
+
+/ip route rule add comment="From ISP1 IP to Inet" src-address=212.220.217.38 table=to_isp1
+
+# Прописываем правило NAT для исходящего трафика
+
+/ip firewall nat add action=src-nat chain=srcnat comment="NAT via ISP1" \
+
+ipsec-policy=out,none out-interface=ether2 to-addresses=212.220.217.38
+
+# Отправляем клиентов из списка, которым запрещен выход через остальных провайдеров сразу на шлюз провайдера ISP1
+
+/ip firewall mangle add action=route chain=prerouting \
+
+comment="Address List via ISP1 only" dst-address-list=!BOGONS passthrough=no \
+
+route-dst=212.220.217.37 src-address-list=Via_only_ISP1 place-before=0
+
+# Настраиваем подключение к ISP2.
+
+Ether3
+
+/ip address add interface=ether3 address=212.220.217.30/30 comment="ISP2 IP"
+
+/ip route add check-gateway=ping comment="For recursion via ISP2" distance=1 \
+
+dst-address=4.2.2.2/32 gateway=212.220.217.29 scope=11
+
+/ip route add check-gateway=ping comment="Unmarked via ISP2" distance=1 \
+
+gateway=4.2.2.2 target-scope=11
+
+/ip route add comment="Marked via ISP2 Main" distance=1 gateway=4.2.2.2 \
+
+routing-mark=to_isp2 target-scope=11
+
+/ip route add comment="Marked via ISP1 Backup1" distance=2 gateway=4.2.2.2 \
+
+routing-mark=to_isp1 target-scope=11
+
+/ip route add comment="Marked via ISP3 Backup2" distance=3 gateway=4.2.2.2 \
+
+routing-mark=to_isp3 target-scope=11
+
+/ip route add comment="Marked via ISP4 Backup2" distance=3 gateway=4.2.2.2 \
+
+routing-mark=to_isp4 target-scope=11
+
+/ip firewall nat add action=src-nat chain=srcnat ipsec-policy=out,none \
+
+out-interface=ether3 to-addresses=212.220.217.30 comment="NAT via ISP2"
+
+/ip route rule add comment="From ISP2 IP to Inet" \
+
+src-address=212.220.217.30 table=to_isp2
+
+Ether4
+
+/ip address add interface=ether4 address=212.220.217.34/30 comment="ISP3 IP"
+
+/ip route add check-gateway=ping comment="For recursion via ISP3" distance=1 \
+
+dst-address=4.2.2.3/32 gateway=212.220.217.34 scope=11
+
+/ip route add check-gateway=ping comment="Unmarked via ISP3" distance=1 \
+
+gateway=4.2.2.3 target-scope=11
+
+/ip route add comment="Marked via ISP3 Main" distance=1 gateway=4.2.2.3 \
+
+routing-mark=to_isp3 target-scope=11
+
+/ip route add comment="Marked via ISP1 Backup1" distance=2 gateway=4.2.2.3 \
+
+routing-mark=to_isp1 target-scope=11
+
+/ip route add comment="Marked via ISP2 Backup2" distance=3 gateway=4.2.2.3 \
+
+routing-mark=to_isp2 target-scope=11
+
+/ip firewall nat add action=src-nat chain=srcnat ipsec-policy=out,none \
+
+out-interface=ether4 to-addresses=212.220.217.34 comment="NAT via ISP3"
+
+/ip route rule add comment="From ISP3 IP to Inet" \
+
+src-address=212.220.217.34 table=to_isp3
+
+Ether5
+
+/ip address add interface=ether5 address=212.220.217.42/30 comment="ISP4 IP"
+
+/ip route add check-gateway=ping comment="For recursion via ISP4" distance=1 \
+
+dst-address=4.2.2.4/32 gateway=212.220.217.41 scope=11
+
+/ip route add check-gateway=ping comment="Unmarked via ISP4" distance=1 \
+
+gateway=4.2.2.4 target-scope=11
+
+/ip route add comment="Marked via ISP4 Main" distance=1 gateway=4.2.2.4 \
+
+routing-mark=to_isp4 target-scope=11
+
+/ip route add comment="Marked via ISP1 Backup1" distance=2 gateway=4.2.2.4 \
+
+routing-mark=to_isp1 target-scope=11
+
+/ip route add comment="Marked via ISP2 Backup2" distance=3 gateway=4.2.2.4 \
+
+routing-mark=to_isp2 target-scope=11
+
+/ip firewall nat add action=src-nat chain=srcnat ipsec-policy=out,none \
+
+out-interface=ether5 to-addresses=212.220.217.42 comment="NAT via ISP4"
+
+/ip route rule add comment="From ISP4 IP to Inet" \
+
+src-address=212.220.217.42 table=to_isp4
