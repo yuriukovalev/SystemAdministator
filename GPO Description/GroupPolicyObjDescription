@@ -1,0 +1,1 @@
+(Get-Gpo -Guid '38364F3B-AEAB-46B2-AE1E-C3394BD92EC4').Description='Install GLPI agent for Workstation. Creator '+ $env:username
