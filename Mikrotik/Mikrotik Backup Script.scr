@@ -1,0 +1,110 @@
+/tool e-mail send to=office@it-itc96.ru from=office@it-itc96.ru body=test
+/system ntp client
+
+set enabled=yes
+
+/system ntp server
+
+set enabled=yes use-local-clock=yes
+
+/system ntp client servers
+
+add address=time.google.com
+
+/system scheduler
+
+add interval=1d name=Backup on-event=/system script run Backup=\
+
+ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon \
+
+start-date=sep/17/2023 start-time=11:00:06
+
+/system script
+
+add dont-require-permissions=no name=Backup owner=kovalev.jm policy=\
+
+ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon source=":\
+
+local backupfile ([/system identity get name] .\"-\" . [:pick [/system clo\
+
+ck get date] 7 11] .\"-\" . [:pick [/system clock get date] 0 3] .\"-\" . \
+
+[:pick [/system clock get date] 4 6] . \".backup\");\r\
+
+\n:local exportfile ([/system identity get name] .\"-\" . [:pick [/system \
+
+clock get date] 7 11] .\"-\" . [:pick [/system clock get date] 0 3] .\"-\"\
+
+\_. [:pick [/system clock get date] 4 6] . \".rsc\");\r\
+
+\n/system backup save dont-encrypt=yes name=\$backupfile;\r\
+
+\n:delay 5;\r\
+
+\n/export file=\$exportfile;\r\
+
+\n:delay 5;\r\
+
+\n:local date [/system clock get date];\r\
+
+\n:local body1 \"\$date Mikrotik backup\";\r\
+
+\n:local body2 \"\$date Mikrotik export\";\r\
+
+\n/tool e-mail send to=\"office@it-itc96.ru\" body=\"\$body1\" subject=\"\
+
+\$body1\" file=\$backupfile;\r\
+
+\n:delay 5;\r\
+
+\n/tool e-mail send to=\"office@it-itc96.ru\" body=\"\$body2\" subject=\"\
+
+\$body2\" file=\$exportfile;\r\
+
+\n:delay 5;\r\
+
+\n/file remove \$backupfile;\r\
+
+\n/file remove \$exportfile;\r\
+
+\n:log warning \"backup, export e-mail finished\";"
+
+/tool e-mail
+
+set address=91.201.52.4 from=office@it-itc96.ru start-tls=yes user=office@it-itc96.ru password=
+
+/system script run Backup
+
+/system ntp server set broadcast=yes broadcast-addresses=216.239.35.0 enabled=yes manycast=no
+
+/tool e-mail send to="office@it-itc96.ru" body="$body2" subject="$body2" file=$exportfile;
+
+:local backupfile ([/system identity get name] ."-" . [:pick [/system clock get date] 7 11] ."-" . [:pick [/system clock get date] 0 3] ."-" . [:pick [/system clock get date] 4 6] . ".backup");
+
+:local exportfile ([/system identity get name] ."-" . [:pick [/system clock get date] 7 11] ."-" . [:pick [/system clock get date] 0 3] ."-" . [:pick [/system clock get date] 4 6] . ".rsc");
+
+/system backup save dont-encrypt=yes name=$backupfile;
+
+:delay 5;
+
+/export file=$exportfile;
+
+:delay 5;
+
+:local body1 "Mikrotik backup";
+
+:local body2 "Mikrotik export";
+
+/tool e-mail send to="office@it-itc96.ru" file=$backupfile;
+
+:delay 5;
+
+/tool e-mail send to="office@it-itc96.ru" file=$exportfile;
+
+:delay 5;
+
+/file remove $backupfile;
+
+/file remove $exportfile;
+
+:log warning "backup, export e-mail finished";
