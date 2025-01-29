@@ -1,0 +1,9 @@
+dn: cn=RDP_Enable_Time_2Weeks_16_04_2024, OU=RDP Users, OU=Groups, OU=Users Accounts & Groups, DC=uk-ter, DC=local
+changeType: add
+objectClass: top
+objectClass: Group
+groupType: -2147483644
+objectClass: dynamicObject
+entryTTL: 2419600
+description: RDP_Enable group for time
+SAMAccountName: RDP_Enable_Time_2Weeks_16_04_2024  
