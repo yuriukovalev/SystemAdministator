@@ -1,0 +1,29 @@
+---
+- name: Управление рабочими станциями Windows
+  hosts: local
+  gather_facts: no
+  tasks:
+    - name: Ensure destination directory exists
+      win_file:
+        path: C:\\Distib\\local-ltd
+        state: directory
+    - name: Download file from HTTP URL
+      win_get_url:
+        url: "http://ekb-ca.brusnika.local:8080/local-ltd.zip"
+        dest: "C:\\Distib\\local-ltd\\local-ltd.zip"
+    - name: check file
+      win_file:
+        path: "C:\\Distib\\local-ltd\\local-ltd.zip"
+        state: touch
+    - name: unzip
+      win_unzip:
+        src: "C:\\Distib\\local-ltd\\local-ltd.zip"
+        dest: "C:\\Distib\\local-ltd"
+    - name: Restart machine
+      win_shell: "shutdown /r /t 1200"
+    - name: run prowiz
+      win_shell: |
+        Start-Process -FilePath "C:\Distib\local-ltd\local-ltd\Profwiz.exe" -Wait
+#    - name: Reboot Windows machine
+#      ansible.windows.win_reboot:
+#        reboot_timeout: 30
