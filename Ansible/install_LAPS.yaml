@@ -1,0 +1,20 @@
+---
+- name: Install LAPS
+  hosts: ltd
+  gather_facts: no
+  tasks:
+    - name: Ensure destination directory exists
+      win_file:
+        path: C:\\Distib\\ltd
+        state: directory
+    - name: Download file from HTTPS URL
+      win_get_url:
+        url: "https://download.microsoft.com/download/C/7/A/C7AAD914-A8A6-4904-88A1-29E657445D03/LAPS.x64.msi"
+        dest: "C:\\Distib\\ltd\\LAPS.x64.msi"
+    - name: Install MSI LAPS
+      win_package:
+        path: C:\\Distib\\ltd\\LAPS.x64.msi
+        state: present
+#    - name: Reboot Windows machine
+#      ansible.windows.win_reboot:
+#        reboot_timeout: 30
