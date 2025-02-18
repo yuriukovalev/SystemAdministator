@@ -1,0 +1,11 @@
+$NexusUrl = "https://repo.brusnika.tech"
+$Repo = "chocolatey-files"
+$ComponentGroup = "MDM-distrib"
+$FilePath = "/Users/user/Downloads/Telegram Desktop/Acrobat DC 22.002.20191 U2B INSTALLER.pkg"
+$FileName = [System.IO.Path]::GetFileName($FilePath)
+$User = "yu.kovalyov"
+$Password = "Wo6gUA7X5"
+$Uri = "$NexusUrl/repository/$Repo/$ComponentGroup/$FileName"
+$Bytes = [System.IO.File]::ReadAllBytes($FilePath)
+$Base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${User}:$Password"))
+Invoke-RestMethod -Uri $Uri -Method Put -Body $Bytes -Headers @{Authorization=("Basic {0}" -f $Base64AuthInfo)}
