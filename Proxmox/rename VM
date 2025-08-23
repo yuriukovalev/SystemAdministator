@@ -1,0 +1,18 @@
+VMID=1001
+HN="srv-docker-deb13"
+mkdir -p /var/lib/vz/snippets
+
+# 1) user-data: явно задать hostname и разрешить cloud-init его менять
+cat >/var/lib/vz/snippets/${VMID}-user.yml <<EOF
+#cloud-config
+preserve_hostname: false
+hostname: ${HN}
+fqdn: ${FQDN}
+manage_etc_hosts: true
+EOF
+
+# 2) привязать user-data к ВМ (если ранее уже был --cicustom, просто перезаписываем его)
+qm set $VMID --cicustom "user=local:snippets/${VMID}-user.yml"
+
+# 3) (не обязательно) глянуть, что PVE отдаст внутрь ВМ
+qm cloudinit dump $VMID user
